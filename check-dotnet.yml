@@ -1,0 +1,61 @@
+
+---
+- name: Check for .NET Core installation using PowerShell
+  hosts: windows_hosts
+  tasks:
+    - name: Check if .NET Core is installed
+      ansible.windows.win_powershell:
+        script: |
+              if (Get-Command "dotnet" -ErrorAction SilentlyContinue) {
+                try {
+                  $version = dotnet --info
+                  Write-Output ".NET Core is installed. Version: $version"
+                } catch {
+                  Write-Output "Failed to retrieve .NET Core version."
+                }
+              } else {
+                Write-Output "dotnet command not found. .NET Core might not be installed."
+              }
+      register: dotnet_check
+
+    - name: Show .NET Core check result
+      debug:
+        msg: "{{ dotnet_check.output }}"
+
+    - name: Check if dotnet-core-uninstall.msi installed
+      ansible.windows.win_stat:
+        path: 'C:\Program Files (x86)\dotnet-core-uninstall\dotnet-core-uninstall.exe'
+      register: stat_file
+      ignore_errors: True
+      when: "'.NET Core is installed.' in dotnet_check.output[0]"
+
+    - name: Set do_install if .NET Core is installed and dotnet-core-uninstall is not installed.
+      set_fact:
+        do_install_flag: true
+      when:
+        - stat_file is defined
+
+    - name: Set do_install if .NET Core is installed and dotnet-core-uninstall is not installed.
+      set_fact:
+        do_install: true
+      when:
+        - do_install_flag == true
+
+    - name: Copy dotnet-core-uninstall.msi file
+      ansible.windows.win_get_url:
+        url: '$some_url'
+        dest: C:\Temp\dotnet-core-uninstall-1.6.0.msi
+      register: download_result
+      ignore_errors: True
+      when:
+        - do_install is defined
+        - do_install == true
+
+    - name: Install an dotnet-core-uninstall.msi file
+      ansible.windows.win_package:
+        path: 'C:\Temp\dotnet-core-uninstall-1.6.0.msi'
+        state: present
+      when:
+        - do_install is defined
+        - do_install == true
+
